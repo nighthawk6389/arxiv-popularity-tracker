@@ -25,14 +25,11 @@ def discover(categories: list[str], window_days: int, limit: int) -> list[Paper]
     missing_hf_ids = [hf_id for hf_id in hf_ids if hf_id not in seen]
     if missing_hf_ids:
         logger.info("Fetching %d HF trending papers not in arXiv results", len(missing_hf_ids))
-        for hf_id in missing_hf_ids:
-            try:
-                from arxiv_popularity.providers.arxiv import fetch_single_paper
-                paper = fetch_single_paper(hf_id)
-                if paper:
-                    seen[paper.arxiv_id] = paper
-            except Exception:
-                logger.debug("Could not fetch HF paper %s from arXiv", hf_id)
+        from arxiv_popularity.providers.arxiv import fetch_papers_by_ids
+        fetched = fetch_papers_by_ids(missing_hf_ids)
+        for paper in fetched:
+            if paper.arxiv_id not in seen:
+                seen[paper.arxiv_id] = paper
 
     for rank, hf_id in enumerate(hf_ids, 1):
         if hf_id in seen:

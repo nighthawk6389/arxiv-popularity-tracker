@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 
 import feedparser
 
 from arxiv_popularity.matching import normalize_arxiv_id
 from arxiv_popularity.models import Paper
+from arxiv_popularity.utils import fetch_with_retry
 
 logger = logging.getLogger("arxiv_popularity.providers.arxiv")
 
@@ -62,9 +64,17 @@ def fetch_arxiv_papers(
             "sortOrder": "descending",
         }
         logger.info("Fetching arXiv papers (start=%d, max=%d)", start, page_size)
-        feed = feedparser.parse(f"{ARXIV_API_URL}?{_encode_params(params)}")
+
+        try:
+            resp = fetch_with_retry(ARXIV_API_URL, params=params, timeout=30)
+            feed = feedparser.parse(resp.text)
+        except Exception:
+            logger.warning("arXiv API request failed", exc_info=True)
+            break
 
         if not feed.entries:
+            logger.debug("No entries returned from arXiv (possibly rate limited or empty)")
+
             break
 
         found_old = False
@@ -83,6 +93,7 @@ def fetch_arxiv_papers(
         if found_old or len(feed.entries) < page_size:
             break
         start += page_size
+        time.sleep(3)  # arXiv requires 3s between requests
 
     logger.info("Discovered %d papers from arXiv", len(all_papers))
     return all_papers
@@ -94,8 +105,27 @@ def _encode_params(params: dict) -> str:
 
 
 def fetch_single_paper(arxiv_id: str) -> Paper | None:
-    params = {"id_list": arxiv_id, "max_results": 1}
-    feed = feedparser.parse(f"{ARXIV_API_URL}?{_encode_params(params)}")
-    if feed.entries:
-        return _parse_entry(feed.entries[0])
-    return None
+    papers = fetch_papers_by_ids([arxiv_id])
+    return papers[0] if papers else None
+
+
+def fetch_papers_by_ids(arxiv_ids: list[str]) -> list[Paper]:
+    """Fetch multiple papers by ID in a single arXiv API call."""
+    if not arxiv_ids:
+        return []
+    id_list = ",".join(arxiv_ids)
+    params = {"id_list": id_list, "max_results": len(arxiv_ids)}
+    try:
+        resp = fetch_with_retry(ARXIV_API_URL, params=params, timeout=60)
+        feed = feedparser.parse(resp.text)
+        papers = []
+        for entry in feed.entries:
+            try:
+                papers.append(_parse_entry(entry))
+            except Exception:
+                logger.warning("Failed to parse entry %s", entry.get("id", "?"), exc_info=True)
+        logger.info("Fetched %d papers by ID", len(papers))
+        return papers
+    except Exception:
+        logger.warning("Failed to fetch papers by IDs", exc_info=True)
+        return []

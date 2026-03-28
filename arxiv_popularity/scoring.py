@@ -50,10 +50,26 @@ def generate_explanation(breakdown: ScoreBreakdown, weights: dict) -> str:
     top_name, top_frac = sorted_components[0]
     second_name, second_frac = sorted_components[1]
 
-    # Special case: recent + trending
-    if fractions.get("recency", 0) > 0.2 and fractions.get("HF trending", 0) > 0.2:
-        return "New breakout paper with trending signal"
+    has_hn = breakdown.hn_discussion > 0.02
+    has_citations = breakdown.citations > 0.05
+    is_hf = breakdown.hf_trending > 0
+    is_recent = breakdown.recency > 0.5
 
+    # Multi-signal cases first (most interesting)
+    if is_recent and is_hf and has_hn:
+        return "New breakout with HF trending and HN discussion"
+    if is_recent and is_hf and has_citations:
+        return "New trending paper with early citations"
+    if is_recent and has_hn and has_citations:
+        return "Recent paper with strong discussion and citations"
+    if is_recent and has_hn:
+        return "Recent paper with HN discussion"
+    if is_recent and is_hf:
+        return "New paper trending on HuggingFace"
+    if has_hn and has_citations:
+        return "Strong discussion and citation signal"
+
+    # Single dominant signal
     if top_frac > 0.50:
         return f"Driven mainly by {top_name}"
 
