@@ -4,7 +4,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
-from arxiv_popularity.matching import normalize_title
 from arxiv_popularity.models import HNMention, Paper
 from arxiv_popularity.utils import fetch_with_retry
 
@@ -56,10 +55,10 @@ def _search_for_paper(paper: Paper) -> list[HNMention]:
     except Exception:
         logger.debug("HN search by URL failed for %s", paper.arxiv_id)
 
-    # Strategy 3: fallback to normalized title (only if no results yet)
+    # Strategy 3: fallback to title (only if no results yet)
     if not all_mentions:
         try:
-            title_query = normalize_title(paper.title)[:80]
+            title_query = paper.title[:80]
             all_mentions.extend(_search_hn(title_query))
         except Exception:
             logger.debug("HN search by title failed for %s", paper.arxiv_id)

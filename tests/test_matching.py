@@ -35,6 +35,15 @@ class TestExtractArxivIdFromUrl:
     def test_huggingface_papers_url(self):
         assert extract_arxiv_id_from_url("https://huggingface.co/papers/2401.12345") == "2401.12345"
 
+    def test_url_with_query_string(self):
+        assert extract_arxiv_id_from_url("https://arxiv.org/abs/2401.12345?context=cs.AI") == "2401.12345"
+
+    def test_url_with_fragment(self):
+        assert extract_arxiv_id_from_url("https://arxiv.org/abs/2401.12345#section1") == "2401.12345"
+
+    def test_url_in_markdown(self):
+        assert extract_arxiv_id_from_url("(https://arxiv.org/abs/2401.12345)") == "2401.12345"
+
 
 class TestNormalizeTitle:
     def test_lowercase(self):

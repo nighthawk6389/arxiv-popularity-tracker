@@ -30,8 +30,19 @@ def test_parse_entry():
 
 
 def test_fetch_arxiv_papers_filters_by_window():
-    with patch("arxiv_popularity.providers.arxiv.feedparser") as mock_fp:
-        old_entry = {**SAMPLE_ENTRY, "published": "2020-01-01T00:00:00Z", "updated": "2020-01-01T00:00:00Z"}
+    old_entry = {**SAMPLE_ENTRY, "published": "2020-01-01T00:00:00Z", "updated": "2020-01-01T00:00:00Z"}
+
+    mock_resp = MagicMock()
+    mock_resp.text = ""  # feedparser will parse this
+
+    with patch("arxiv_popularity.providers.arxiv.fetch_with_retry", return_value=mock_resp), \
+         patch("arxiv_popularity.providers.arxiv.feedparser") as mock_fp:
         mock_fp.parse.return_value = MagicMock(entries=[SAMPLE_ENTRY, old_entry])
         papers = fetch_arxiv_papers(categories=["cs.AI"], window_days=7, limit=100)
         assert isinstance(papers, list)
+
+
+def test_fetch_arxiv_papers_handles_api_failure():
+    with patch("arxiv_popularity.providers.arxiv.fetch_with_retry", side_effect=Exception("API down")):
+        papers = fetch_arxiv_papers(categories=["cs.AI"], window_days=7, limit=100)
+    assert papers == []

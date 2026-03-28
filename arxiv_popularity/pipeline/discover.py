@@ -64,6 +64,14 @@ def discover(categories: list[str], window_days: int, limit: int) -> list[Paper]
             seen[hf_id].hf_trending_rank = rank
 
     trending_count = sum(1 for p in seen.values() if p.hf_trending)
-    logger.info("Discovery complete: %d papers (%d HF trending)", len(seen), trending_count)
+    result = list(seen.values())
+    if len(result) > limit:
+        logger.info("Trimming %d papers to limit=%d (HF trending papers prioritized)", len(result), limit)
+        # Sort so HF trending papers come first, then by published date
+        result.sort(key=lambda p: (not p.hf_trending, p.published), reverse=False)
+        result.sort(key=lambda p: p.hf_trending, reverse=True)
+        result = result[:limit]
+        trending_count = sum(1 for p in result if p.hf_trending)
 
-    return list(seen.values())
+    logger.info("Discovery complete: %d papers (%d HF trending)", len(result), trending_count)
+    return result

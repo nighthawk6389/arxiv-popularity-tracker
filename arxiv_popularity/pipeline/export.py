@@ -87,11 +87,13 @@ def _export_markdown(papers: list[Paper], path: str, top_n: int) -> None:
         hn = str(len(p.hn_mentions)) if p.hn_mentions else "0"
         hf = "Yes" if p.hf_trending else ""
         date = p.published.strftime("%Y-%m-%d")
-        title_link = "[" + p.title + "](" + p.arxiv_url + ")"
+        safe_title = p.title.replace("|", "\\|")
+        safe_explanation = p.explanation.replace("|", "\\|")
+        title_link = "[" + safe_title + "](" + p.arxiv_url + ")"
         lines.append(
             "| " + str(i) + " | " + title_link + " | " + date + " | "
             + f"{p.total_score:.3f}" + " | " + cites + " | " + hn + " | " + hf
-            + " | " + p.explanation + " |"
+            + " | " + safe_explanation + " |"
         )
 
     with open(path, "w") as f:
@@ -140,7 +142,7 @@ def _export_html(papers: list[Paper], path: str, top_n: int) -> None:
         if len(p.authors) > 3:
             authors_short += " +" + str(len(p.authors) - 3)
 
-        score_bar_width = int(p.total_score * 100)
+        score_bar_width = min(100, int(p.total_score * 100))
 
         rows.append(
             "      <tr>\n"

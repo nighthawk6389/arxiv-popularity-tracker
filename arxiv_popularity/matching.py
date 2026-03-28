@@ -10,8 +10,8 @@ def normalize_arxiv_id(raw: str) -> str:
 
 def extract_arxiv_id_from_url(url: str) -> str | None:
     patterns = [
-        r"arxiv\.org/(?:abs|pdf)/(\S+)",
-        r"huggingface\.co/papers/(\S+)",
+        r"arxiv\.org/(?:abs|pdf)/([\d.]+(?:v\d+)?)",
+        r"huggingface\.co/papers/([\d.]+(?:v\d+)?)",
     ]
     for pattern in patterns:
         match = re.search(pattern, url)

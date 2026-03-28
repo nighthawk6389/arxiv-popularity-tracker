@@ -102,11 +102,6 @@ def fetch_arxiv_papers(
     return all_papers
 
 
-def _encode_params(params: dict) -> str:
-    from urllib.parse import urlencode
-    return urlencode(params)
-
-
 def fetch_single_paper(arxiv_id: str) -> Paper | None:
     papers = fetch_papers_by_ids([arxiv_id])
     return papers[0] if papers else None

@@ -40,6 +40,7 @@ def fetch_with_retry(
     backoff: float = 1.0,
     timeout: int = 30,
 ) -> requests.Response:
+    last_exception: Exception | None = None
     for attempt in range(max_retries):
         try:
             resp = requests.request(
@@ -49,13 +50,17 @@ def fetch_with_retry(
                 wait = backoff * (2 ** attempt)
                 logger.warning("Rate limited (%d) on %s, waiting %.1fs", resp.status_code, url, wait)
                 time.sleep(wait)
+                last_exception = requests.HTTPError(
+                    f"{resp.status_code} for url: {url}", response=resp
+                )
                 continue
             resp.raise_for_status()
             return resp
         except requests.RequestException as e:
+            last_exception = e
             if attempt == max_retries - 1:
-                raise
+                break
             wait = backoff * (2 ** attempt)
             logger.warning("Request to %s failed (%s), retrying in %.1fs", url, e, wait)
             time.sleep(wait)
-    raise requests.RequestException(f"Failed after {max_retries} retries: {url}")
+    raise last_exception or requests.RequestException(f"Failed after {max_retries} retries: {url}")
