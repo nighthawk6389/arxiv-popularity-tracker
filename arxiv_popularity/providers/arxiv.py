@@ -66,7 +66,10 @@ def fetch_arxiv_papers(
         logger.info("Fetching arXiv papers (start=%d, max=%d)", start, page_size)
 
         try:
-            resp = fetch_with_retry(ARXIV_API_URL, params=params, timeout=30)
+            resp = fetch_with_retry(
+                ARXIV_API_URL, params=params, timeout=60,
+                max_retries=5, backoff=3.0,
+            )
             feed = feedparser.parse(resp.text)
         except Exception:
             logger.warning("arXiv API request failed", exc_info=True)
@@ -116,7 +119,10 @@ def fetch_papers_by_ids(arxiv_ids: list[str]) -> list[Paper]:
     id_list = ",".join(arxiv_ids)
     params = {"id_list": id_list, "max_results": len(arxiv_ids)}
     try:
-        resp = fetch_with_retry(ARXIV_API_URL, params=params, timeout=60)
+        resp = fetch_with_retry(
+            ARXIV_API_URL, params=params, timeout=60,
+            max_retries=5, backoff=3.0,
+        )
         feed = feedparser.parse(resp.text)
         papers = []
         for entry in feed.entries:

@@ -45,9 +45,9 @@ def fetch_with_retry(
             resp = requests.request(
                 method, url, headers=headers, json=json, params=params, timeout=timeout
             )
-            if resp.status_code == 429:
+            if resp.status_code in (429, 503):
                 wait = backoff * (2 ** attempt)
-                logger.warning("Rate limited on %s, waiting %.1fs", url, wait)
+                logger.warning("Rate limited (%d) on %s, waiting %.1fs", resp.status_code, url, wait)
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
