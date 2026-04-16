@@ -3,9 +3,16 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from arxiv_popularity.matching import extract_github_url
 from arxiv_popularity.models import Paper
 from arxiv_popularity.providers.arxiv import fetch_arxiv_papers
-from arxiv_popularity.providers.huggingface import fetch_hf_trending_ids, get_hf_titles
+from arxiv_popularity.providers.huggingface import (
+    fetch_hf_trending_ids,
+    get_hf_titles,
+    get_hf_upvotes,
+    get_hf_project_pages,
+    get_hf_github_data,
+)
 
 logger = logging.getLogger("arxiv_popularity.pipeline.discover")
 
@@ -58,10 +65,35 @@ def discover(categories: list[str], window_days: int, limit: int) -> list[Paper]
                     stub.title = hf_titles[hf_id]
                 seen[hf_id] = stub
 
+    # Assign HF metadata: trending flag, rank, upvotes, and GitHub data
+    hf_upvotes = get_hf_upvotes()
+    hf_project_pages = get_hf_project_pages()
+    hf_github = get_hf_github_data()
     for rank, hf_id in enumerate(hf_ids, 1):
         if hf_id in seen:
-            seen[hf_id].hf_trending = True
-            seen[hf_id].hf_trending_rank = rank
+            paper = seen[hf_id]
+            paper.hf_trending = True
+            paper.hf_trending_rank = rank
+            paper.hf_upvotes = hf_upvotes.get(hf_id, 0)
+
+            # Use GitHub data from HF API (repo URL + stars) if available
+            if hf_id in hf_github:
+                gh_url, gh_stars = hf_github[hf_id]
+                paper.github_url = gh_url
+                if gh_stars is not None:
+                    paper.github_stars = gh_stars
+            elif hf_id in hf_project_pages:
+                # Fall back to extracting GitHub URL from project page
+                gh_url = extract_github_url(hf_project_pages[hf_id])
+                if gh_url:
+                    paper.github_url = gh_url
+
+    # Try to extract GitHub URLs from abstracts for all papers missing one
+    for paper in seen.values():
+        if not paper.github_url and paper.abstract:
+            gh_url = extract_github_url(paper.abstract)
+            if gh_url:
+                paper.github_url = gh_url
 
     trending_count = sum(1 for p in seen.values() if p.hf_trending)
     result = list(seen.values())

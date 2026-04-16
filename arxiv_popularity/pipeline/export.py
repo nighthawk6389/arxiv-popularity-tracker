@@ -12,6 +12,17 @@ from arxiv_popularity.models import Paper
 logger = logging.getLogger("arxiv_popularity.pipeline.export")
 
 
+def _fmt_stars(count: int | None) -> str:
+    """Format star/upvote counts for display: 1234 -> '1.2k'."""
+    if count is None or count <= 0:
+        return ""
+    if count >= 10_000:
+        return f"{count // 1000}k"
+    if count >= 1_000:
+        return f"{count / 1000:.1f}k"
+    return str(count)
+
+
 def _paper_to_dict(paper: Paper) -> dict:
     return {
         "arxiv_id": paper.arxiv_id,
@@ -26,14 +37,18 @@ def _paper_to_dict(paper: Paper) -> dict:
         "citation_count": paper.citation_count,
         "hf_trending": paper.hf_trending,
         "hf_trending_rank": paper.hf_trending_rank,
+        "hf_upvotes": paper.hf_upvotes,
+        "github_url": paper.github_url,
+        "github_stars": paper.github_stars,
         "hn_mention_count": len(paper.hn_mentions),
         "hn_total_points": sum(m.points for m in paper.hn_mentions),
         "score": round(paper.total_score, 4),
         "score_breakdown": {
             "recency": round(paper.score_breakdown.recency, 4),
             "citations": round(paper.score_breakdown.citations, 4),
-            "hf_trending": round(paper.score_breakdown.hf_trending, 4),
+            "hf_popularity": round(paper.score_breakdown.hf_popularity, 4),
             "hn_discussion": round(paper.score_breakdown.hn_discussion, 4),
+            "github_stars": round(paper.score_breakdown.github_stars, 4),
         } if paper.score_breakdown else None,
         "explanation": paper.explanation,
     }
@@ -49,7 +64,8 @@ def _export_json(papers: list[Paper], path: str) -> None:
 def _export_csv(papers: list[Paper], path: str) -> None:
     fieldnames = [
         "arxiv_id", "title", "authors", "categories", "published",
-        "score", "citation_count", "hn_mention_count", "hf_trending", "explanation",
+        "score", "citation_count", "hn_mention_count", "hf_upvotes",
+        "github_stars", "explanation",
     ]
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -64,7 +80,8 @@ def _export_csv(papers: list[Paper], path: str) -> None:
                 "score": f"{p.total_score:.4f}",
                 "citation_count": p.citation_count if p.citation_count is not None else "",
                 "hn_mention_count": len(p.hn_mentions),
-                "hf_trending": "Yes" if p.hf_trending else "",
+                "hf_upvotes": p.hf_upvotes if p.hf_upvotes > 0 else "",
+                "github_stars": p.github_stars if p.github_stars is not None else "",
                 "explanation": p.explanation,
             })
     logger.info("Wrote %s (%d papers)", path, len(papers))
@@ -79,13 +96,14 @@ def _export_markdown(papers: list[Paper], path: str, top_n: int) -> None:
         "",
         "## Top " + str(len(top)) + " Papers",
         "",
-        "| # | Title | Date | Score | Cites | HN | HF | Why |",
-        "|---|-------|------|-------|-------|----|----|-----|",
+        "| # | Title | Date | Score | Cites | HN | HF | GH | Why |",
+        "|---|-------|------|-------|-------|----|----|----|-----|",
     ]
     for i, p in enumerate(top, 1):
         cites = str(p.citation_count) if p.citation_count is not None else "-"
         hn = str(len(p.hn_mentions)) if p.hn_mentions else "0"
-        hf = "Yes" if p.hf_trending else ""
+        hf = str(p.hf_upvotes) if p.hf_upvotes > 0 else ""
+        gh = _fmt_stars(p.github_stars) if p.github_stars else ""
         date = p.published.strftime("%Y-%m-%d")
         safe_title = p.title.replace("|", "\\|")
         safe_explanation = p.explanation.replace("|", "\\|")
@@ -93,7 +111,7 @@ def _export_markdown(papers: list[Paper], path: str, top_n: int) -> None:
         lines.append(
             "| " + str(i) + " | " + title_link + " | " + date + " | "
             + f"{p.total_score:.3f}" + " | " + cites + " | " + hn + " | " + hf
-            + " | " + safe_explanation + " |"
+            + " | " + gh + " | " + safe_explanation + " |"
         )
 
     with open(path, "w") as f:
@@ -121,9 +139,10 @@ tr:hover { background: #f0f4ff; }
 .score-bar { height: 4px; background: #eee; border-radius: 2px; margin-top: 3px; }
 .score-fill { height: 100%; background: #4361ee; border-radius: 2px; }
 .num { text-align: center; font-variant-numeric: tabular-nums; }
-.badges { text-align: center; }
-.badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem; font-weight: 700; }
+.signals { text-align: center; }
+.badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem; font-weight: 700; margin: 1px; }
 .badge.hf { background: #ffd21e; color: #1a1a2e; }
+.badge.gh { background: #2ea44f; color: white; }
 .explanation { color: #555; font-size: 0.8rem; max-width: 14rem; }
 """
 
@@ -136,7 +155,18 @@ def _export_html(papers: list[Paper], path: str, top_n: int) -> None:
         hn_count = len(p.hn_mentions)
         hn_points = sum(m.points for m in p.hn_mentions)
         hn_display = str(hn_count) + " (" + str(hn_points) + "pts)" if hn_count else "0"
-        hf_badge = '<span class="badge hf">HF</span>' if p.hf_trending else ""
+
+        # HF upvotes badge
+        hf_badge = ""
+        if p.hf_upvotes > 0:
+            hf_badge = '<span class="badge hf">' + str(p.hf_upvotes) + '</span>'
+
+        # GitHub stars badge
+        gh_badge = ""
+        if p.github_stars is not None and p.github_stars > 0:
+            gh_label = _fmt_stars(p.github_stars)
+            gh_badge = '<span class="badge gh">' + gh_label + '</span>'
+
         date = p.published.strftime("%Y-%m-%d")
         authors_short = ", ".join(p.authors[:3])
         if len(p.authors) > 3:
@@ -158,7 +188,7 @@ def _export_html(papers: list[Paper], path: str, top_n: int) -> None:
             "        </td>\n"
             "        <td class=\"num\">" + cites + "</td>\n"
             "        <td class=\"num\">" + hn_display + "</td>\n"
-            "        <td class=\"badges\">" + hf_badge + "</td>\n"
+            "        <td class=\"signals\">" + hf_badge + " " + gh_badge + "</td>\n"
             "        <td class=\"explanation\">" + escape(p.explanation) + "</td>\n"
             "      </tr>"
         )
@@ -181,7 +211,7 @@ def _export_html(papers: list[Paper], path: str, top_n: int) -> None:
         "  <table>\n"
         "    <thead>\n"
         "      <tr>\n"
-        "        <th>#</th><th>Title</th><th>Date</th><th>Score</th><th>Cites</th><th>HN</th><th>HF</th><th>Why</th>\n"
+        "        <th>#</th><th>Title</th><th>Date</th><th>Score</th><th>Cites</th><th>HN</th><th>Signals</th><th>Why</th>\n"
         "      </tr>\n"
         "    </thead>\n"
         "    <tbody>\n"

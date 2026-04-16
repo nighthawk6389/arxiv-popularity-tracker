@@ -14,9 +14,9 @@ def _make_scored_paper(arxiv_id: str = "2401.12345") -> Paper:
         updated=datetime(2024, 1, 15, tzinfo=timezone.utc),
         arxiv_url=f"https://arxiv.org/abs/{arxiv_id}",
         pdf_url=f"https://arxiv.org/pdf/{arxiv_id}",
-        citation_count=42, hf_trending=True, total_score=0.75,
-        score_breakdown=ScoreBreakdown(recency=0.9, citations=0.4, hf_trending=1.0, hn_discussion=0.3),
-        explanation="Strong HF trending and recency signal",
+        citation_count=42, hf_trending=True, hf_upvotes=55, total_score=0.75,
+        score_breakdown=ScoreBreakdown(recency=0.9, citations=0.4, hf_popularity=0.9, hn_discussion=0.3, github_stars=0.0),
+        explanation="Strong HF popularity and recency signal",
     )
 
 

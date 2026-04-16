@@ -29,9 +29,25 @@ def test_old_paper_has_low_recency():
     assert paper.score_breakdown.recency < 0.1
 
 
-def test_hf_trending_boosts_score():
-    p1 = _make_paper(hf_trending=False)
-    p2 = _make_paper(hf_trending=True)
+def test_hf_upvotes_boost_score():
+    p1 = _make_paper(hf_upvotes=0)
+    p2 = _make_paper(hf_upvotes=50)
+    score_paper(p1, DEFAULT_CONFIG)
+    score_paper(p2, DEFAULT_CONFIG)
+    assert p2.total_score > p1.total_score
+
+
+def test_hf_more_upvotes_higher_score():
+    p1 = _make_paper(hf_upvotes=5)
+    p2 = _make_paper(hf_upvotes=50)
+    score_paper(p1, DEFAULT_CONFIG)
+    score_paper(p2, DEFAULT_CONFIG)
+    assert p2.score_breakdown.hf_popularity > p1.score_breakdown.hf_popularity
+
+
+def test_github_stars_boost_score():
+    p1 = _make_paper(github_stars=None)
+    p2 = _make_paper(github_stars=1000)
     score_paper(p1, DEFAULT_CONFIG)
     score_paper(p2, DEFAULT_CONFIG)
     assert p2.total_score > p1.total_score
@@ -59,13 +75,13 @@ def test_hn_mentions_contribute_to_score():
 
 
 def test_explanation_not_empty():
-    paper = _make_paper(hf_trending=True, citation_count=50)
+    paper = _make_paper(hf_upvotes=40, citation_count=50)
     score_paper(paper, DEFAULT_CONFIG)
     assert paper.explanation != ""
 
 
 def test_score_between_0_and_1():
-    paper = _make_paper(hf_trending=True, citation_count=1000)
+    paper = _make_paper(hf_upvotes=100, citation_count=1000, github_stars=5000)
     mention = HNMention(
         story_id=1, title="HN", points=500, num_comments=200,
         created_at=datetime.now(timezone.utc), url="u",

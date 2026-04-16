@@ -35,6 +35,25 @@ def test_hn_mention():
     assert m.num_comments == 50
 
 
+def test_paper_new_field_defaults():
+    p = Paper(
+        arxiv_id="2401.12345",
+        title="Test Paper",
+        authors=["Author A"],
+        abstract="An abstract.",
+        categories=["cs.AI"],
+        published=datetime(2024, 1, 15, tzinfo=timezone.utc),
+        updated=datetime(2024, 1, 15, tzinfo=timezone.utc),
+        arxiv_url="https://arxiv.org/abs/2401.12345",
+        pdf_url="https://arxiv.org/pdf/2401.12345",
+    )
+    assert p.hf_upvotes == 0
+    assert p.github_url is None
+    assert p.github_stars is None
+
+
 def test_score_breakdown():
-    sb = ScoreBreakdown(recency=0.8, citations=0.3, hf_trending=1.0, hn_discussion=0.5)
+    sb = ScoreBreakdown(recency=0.8, citations=0.3, hf_popularity=0.6, hn_discussion=0.5, github_stars=0.2)
     assert sb.recency == 0.8
+    assert sb.hf_popularity == 0.6
+    assert sb.github_stars == 0.2

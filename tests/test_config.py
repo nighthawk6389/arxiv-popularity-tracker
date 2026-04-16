@@ -14,4 +14,15 @@ def test_weights_sum_to_one():
 
 def test_load_config_returns_defaults():
     cfg = load_config()
-    assert cfg["score_weights"]["recency"] == 0.25
+    assert cfg["score_weights"]["recency"] == 0.20
+
+
+def test_config_has_scale_factors():
+    cfg = load_config()
+    assert "hf_upvote_scale_factor" in cfg
+    assert "github_stars_scale_factor" in cfg
+
+
+def test_config_has_github_provider():
+    cfg = load_config()
+    assert "github" in cfg["providers"]

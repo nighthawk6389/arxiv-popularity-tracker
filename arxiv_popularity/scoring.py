@@ -12,8 +12,10 @@ def _recency_score(paper: Paper, halflife_days: float) -> float:
     return math.exp(-lam * max(age_days, 0))
 
 
-def _hf_score(paper: Paper) -> float:
-    return 1.0 if paper.hf_trending else 0.0
+def _hf_score(paper: Paper, scale_factor: float) -> float:
+    if paper.hf_upvotes <= 0:
+        return 0.0
+    return math.tanh(paper.hf_upvotes / scale_factor)
 
 
 def _hn_score(paper: Paper, halflife_days: float, scale_factor: float) -> float:
@@ -34,12 +36,20 @@ def _citation_score(paper: Paper, scale_factor: float) -> float:
     return math.tanh(count / scale_factor)
 
 
+def _github_score(paper: Paper, scale_factor: float) -> float:
+    count = paper.github_stars or 0
+    if count <= 0:
+        return 0.0
+    return math.tanh(count / scale_factor)
+
+
 def generate_explanation(breakdown: ScoreBreakdown, weights: dict) -> str:
     components = {
         "recency": breakdown.recency * weights["recency"],
-        "HF trending": breakdown.hf_trending * weights["hf_trending"],
+        "HF popularity": breakdown.hf_popularity * weights["hf_popularity"],
         "HN discussion": breakdown.hn_discussion * weights["hn_discussion"],
         "citations": breakdown.citations * weights["citations"],
+        "GitHub stars": breakdown.github_stars * weights["github_stars"],
     }
     total = sum(components.values())
     if total == 0:
@@ -52,22 +62,33 @@ def generate_explanation(breakdown: ScoreBreakdown, weights: dict) -> str:
 
     has_hn = breakdown.hn_discussion > 0.02
     has_citations = breakdown.citations > 0.05
-    is_hf = breakdown.hf_trending > 0
+    has_hf = breakdown.hf_popularity > 0.1
+    has_gh = breakdown.github_stars > 0.1
     is_recent = breakdown.recency > 0.5
 
     # Multi-signal cases first (most interesting)
-    if is_recent and is_hf and has_hn:
-        return "New breakout with HF trending and HN discussion"
-    if is_recent and is_hf and has_citations:
+    if is_recent and has_hf and has_hn and has_gh:
+        return "Breakout paper: HF upvotes, HN buzz, and popular repo"
+    if is_recent and has_hf and has_hn:
+        return "New breakout with HF upvotes and HN discussion"
+    if is_recent and has_hf and has_gh:
+        return "HF trending with popular GitHub repo"
+    if is_recent and has_hf and has_citations:
         return "New trending paper with early citations"
+    if is_recent and has_hn and has_gh:
+        return "HN discussion with well-starred repo"
     if is_recent and has_hn and has_citations:
         return "Recent paper with strong discussion and citations"
     if is_recent and has_hn:
         return "Recent paper with HN discussion"
-    if is_recent and is_hf:
-        return "New paper trending on HuggingFace"
+    if is_recent and has_hf:
+        return "New paper popular on HuggingFace"
+    if is_recent and has_gh:
+        return "New paper with popular GitHub repo"
     if has_hn and has_citations:
         return "Strong discussion and citation signal"
+    if has_gh and has_citations:
+        return "Well-starred repo with citations"
 
     # Single dominant signal
     if top_frac > 0.50:
@@ -84,22 +105,25 @@ def score_paper(paper: Paper, config: dict) -> None:
     halflife = config["recency_halflife_days"]
 
     recency = _recency_score(paper, halflife)
-    hf = _hf_score(paper)
+    hf = _hf_score(paper, config["hf_upvote_scale_factor"])
     hn = _hn_score(paper, halflife, config["hn_scale_factor"])
     citations = _citation_score(paper, config["citation_scale_factor"])
+    gh = _github_score(paper, config["github_stars_scale_factor"])
 
     breakdown = ScoreBreakdown(
         recency=recency,
         citations=citations,
-        hf_trending=hf,
+        hf_popularity=hf,
         hn_discussion=hn,
+        github_stars=gh,
     )
 
     total = (
         weights["recency"] * recency
-        + weights["hf_trending"] * hf
+        + weights["hf_popularity"] * hf
         + weights["hn_discussion"] * hn
         + weights["citations"] * citations
+        + weights["github_stars"] * gh
     )
 
     paper.score_breakdown = breakdown

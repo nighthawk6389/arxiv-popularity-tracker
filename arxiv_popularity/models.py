@@ -18,8 +18,9 @@ class HNMention:
 class ScoreBreakdown:
     recency: float
     citations: float
-    hf_trending: float
+    hf_popularity: float
     hn_discussion: float
+    github_stars: float
 
 
 @dataclass
@@ -38,6 +39,9 @@ class Paper:
     semantic_scholar_id: str | None = None
     hf_trending: bool = False
     hf_trending_rank: int | None = None
+    hf_upvotes: int = 0
+    github_url: str | None = None
+    github_stars: int | None = None
     hn_mentions: list[HNMention] = field(default_factory=list)
 
     total_score: float = 0.0
