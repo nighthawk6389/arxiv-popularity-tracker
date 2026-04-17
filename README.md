@@ -82,6 +82,55 @@ CLI -> Discovery -> Enrichment -> Scoring -> Share (optional) -> Export
 
 See [DESIGN.md](DESIGN.md) for details.
 
+## Daily Pipeline (Docker)
+
+A Docker container runs the full pipeline and pushes HTML reports to the website repo.
+
+### Build
+
+```bash
+docker build -t arxiv-tracker-daily .
+```
+
+### Run
+
+```bash
+docker run --rm \
+  -e DP_API_KEY="dp_live_..." \
+  -v ~/.ssh:/root/.ssh:ro \
+  -v ~/.gitconfig:/root/.gitconfig:ro \
+  -v $(pwd)/output:/output \
+  arxiv-tracker-daily
+```
+
+This will:
+1. Clone the website repo via SSH
+2. Run the tracker with `--share` for the top 3 papers
+3. Push `report.html` to `public/reports/YYYY-MM-DD.html` and `public/reports/latest.html`
+4. Copy `social_posts.md` to the mounted `./output/` directory for review
+
+| Mount | Purpose |
+|-------|---------|
+| `~/.ssh` | SSH keys for git clone/push (read-only) |
+| `~/.gitconfig` | Git user.name and user.email from host (read-only) |
+| `./output` | Social posts output for host-side review |
+
+### Reddit Posting
+
+After reviewing `output/social_posts.md`, post to Reddit using the Claude Code skill:
+
+```
+/post-reddit
+```
+
+This opens Reddit in the browser and walks through each post with your confirmation before submitting.
+
+To preview parsed posts without posting:
+
+```bash
+python scripts/post_to_reddit.py output/social_posts.md
+```
+
 ## Tests
 
 ```bash
