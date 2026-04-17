@@ -1,0 +1,222 @@
+# arXiv Popularity Tracker
+
+> Track which arXiv papers are getting attention right now, and why.
+
+A CLI tool that discovers recent arXiv papers, enriches them with popularity signals from multiple sources, computes a weighted momentum score, and produces ranked reports. Optionally shares top papers via deconstructedpapers.com and generates ready-to-post social media snippets.
+
+## Install
+
+Requires Python 3.10+.
+
+```bash
+pip install -e ".[dev]"
+```
+
+Dependencies: requests, feedparser (pytest for tests). All declared in pyproject.toml.
+
+## Pipeline
+
+The tool runs a sequential pipeline:
+
+```
+Discovery → Enrichment → Scoring → Share (optional) → Export
+```
+
+1. **Discovery**: Fetches recent papers from arXiv API and HuggingFace daily papers.
+2. **Enrichment**: Adds citation counts (Semantic Scholar), Hacker News discussion data, and GitHub star counts in parallel.
+3. **Scoring**: Computes a momentum score (0–1) for each paper and sorts descending.
+4. **Share** (with `--share`): Calls the deconstructedpapers.com auto-share API to create explanation pages and get shareable URLs.
+5. **Export**: Writes output files to the output directory.
+
+## CLI Usage
+
+```bash
+python -m arxiv_popularity run [OPTIONS]
+```
+
+Running with no arguments or with `-h` prints help text.
+
+### Arguments
+
+| Argument       | Default      | Description |
+|----------------|--------------|-------------|
+| --categories   | cs.AI cs.LG  | Space-separated arXiv categories to search |
+| --window       | 7d           | Lookback window. Format: Nd where N is days (e.g. 7d, 14d, 30d) |
+| --limit        | 100          | Maximum papers to fetch during discovery |
+| --top          | 50           | Number of papers to include in ranked reports |
+| --output-dir   | output       | Directory for output files (created if missing) |
+| --share        | off          | Enable share stage: creates deconstructedpapers.com links and generates social posts. Requires DP_API_KEY |
+| -v, --verbose  | off          | Enable debug logging |
+
+### Example Commands
+
+Basic run — discover and rank top 50 AI/ML papers from the past week:
+```bash
+python -m arxiv_popularity run
+```
+
+Custom categories and window:
+```bash
+python -m arxiv_popularity run --categories cs.CL cs.CV --window 14d --top 20
+```
+
+With social post generation:
+```bash
+export DP_API_KEY="dp_live_..."
+python -m arxiv_popularity run --top 10 --share
+```
+
+This produces output/social_posts.md with copy-paste-ready Reddit and X posts for each paper that was successfully shared.
+
+## Environment Variables
+
+All optional unless using `--share`.
+
+| Variable                  | Required | Purpose |
+|---------------------------|----------|---------|
+| SEMANTIC_SCHOLAR_API_KEY  | No       | Higher rate limits for Semantic Scholar citation lookups |
+| GITHUB_TOKEN              | No       | Higher rate limits for GitHub API star count lookups |
+| DP_API_KEY                | For --share | deconstructedpapers.com API key. Get one at https://www.deconstructedpapers.com |
+| DP_BASE_URL               | No       | Override base URL for deconstructedpapers.com (default: https://www.deconstructedpapers.com) |
+
+## Scoring
+
+Each paper gets a momentum score (0–1) computed as a weighted sum of five normalized signals:
+
+| Signal         | Weight | Normalization | Source |
+|----------------|--------|---------------|--------|
+| Recency        | 20%    | Exponential decay with 7-day half-life | arXiv publish date |
+| HF Popularity  | 20%    | tanh(upvotes / 30) | HuggingFace daily papers API |
+| HN Discussion  | 25%    | tanh(time_decayed_sum(points + 2*comments) / 150) | Hacker News Algolia API |
+| Citations      | 20%    | tanh(count / 50) | Semantic Scholar batch API |
+| GitHub Stars   | 15%    | tanh(stars / 500) | GitHub API |
+
+Each paper also gets a human-readable explanation string describing why it scored the way it did (e.g. "Breakout paper: HF upvotes, HN buzz, and popular repo").
+
+## Output Files
+
+All written to the `--output-dir` directory (default: `output/`).
+
+### papers.json
+
+Full structured data for ALL discovered papers (not just top N), sorted by score descending. Array of objects with this schema:
+
+```json
+{
+  "arxiv_id": "2401.12345",
+  "title": "Paper Title",
+  "authors": ["Alice", "Bob"],
+  "abstract": "Full abstract text...",
+  "categories": ["cs.AI", "cs.LG"],
+  "published": "2024-01-15T00:00:00+00:00",
+  "updated": "2024-01-15T00:00:00+00:00",
+  "arxiv_url": "https://arxiv.org/abs/2401.12345",
+  "pdf_url": "https://arxiv.org/pdf/2401.12345",
+  "citation_count": 42,
+  "hf_trending": true,
+  "hf_trending_rank": 3,
+  "hf_upvotes": 55,
+  "github_url": "https://github.com/owner/repo",
+  "github_stars": 1200,
+  "hn_mention_count": 2,
+  "hn_total_points": 340,
+  "score": 0.7523,
+  "score_breakdown": {
+    "recency": 0.9012,
+    "citations": 0.4100,
+    "hf_popularity": 0.8800,
+    "hn_discussion": 0.3200,
+    "github_stars": 0.2100
+  },
+  "explanation": "New breakout with HF upvotes and HN discussion"
+}
+```
+
+Nullable fields: citation_count, hf_trending_rank, github_url, github_stars, score_breakdown. The hn_mention_count and hn_total_points are 0 when no HN mentions. The hf_upvotes is 0 when not trending.
+
+### papers.csv
+
+Flat table with columns: arxiv_id, title, authors, categories, published, score, citation_count, hn_mention_count, hf_upvotes, github_stars, explanation. Authors and categories are semicolon-separated.
+
+### report.md
+
+Markdown summary table of the top N papers with rank, title (linked to arXiv), date, score, citations, HN mentions, HF upvotes, GitHub stars, and explanation.
+
+### report.html
+
+Self-contained HTML file (inline CSS, no external dependencies) with a styled table of the top N papers. Can be opened directly in a browser or hosted as a static page.
+
+### social_posts.md (only with --share)
+
+Generated only when `--share` is used and at least one paper was successfully shared. Contains copy-paste-ready posts for each shared paper:
+
+**Reddit section** per paper:
+- Suggested subreddits (mapped from arXiv categories, e.g. cs.AI → r/MachineLearning, r/artificial)
+- Post title (the paper title)
+- Post body with the paper's trending explanation and the deconstructedpapers.com shareable link
+
+**X/Twitter section** per paper:
+- Full post text under 280 characters
+- Paper title (truncated with ellipsis if needed to fit)
+- Shareable link
+- Hashtags mapped from categories (e.g. cs.AI → #AI #MachineLearning)
+
+Subreddit mapping:
+- cs.AI → r/MachineLearning, r/artificial
+- cs.LG → r/MachineLearning, r/deeplearning
+- cs.CL → r/LanguageTechnology, r/MachineLearning
+- cs.CV → r/computervision, r/MachineLearning
+- stat.ML → r/MachineLearning, r/statistics
+- Fallback → r/MachineLearning
+
+Hashtag mapping:
+- cs.AI → #AI #MachineLearning
+- cs.LG → #DeepLearning #ML
+- cs.CL → #NLP #LLM
+- cs.CV → #ComputerVision #AI
+- stat.ML → #MachineLearning #Statistics
+- Fallback → #AI #Research
+
+## The --share Flag
+
+When `--share` is passed and `DP_API_KEY` is set, the tool calls the deconstructedpapers.com auto-share API (`POST /api/papers/auto-share`) for each of the top N papers. This:
+
+1. Parses the paper's PDF and generates an AI explanation focused on math equations
+2. Creates a publicly accessible page on deconstructedpapers.com
+3. Returns a shareable URL (e.g. https://www.deconstructedpapers.com/papers/abc123)
+
+Cached results are free (1 credit per fresh parse). If `DP_API_KEY` is not set, the share stage is skipped with a warning and no social_posts.md is generated.
+
+## Chaining with deconstructed-papers-skill
+
+This tool pairs with the deconstructed-papers-skill CLI (https://github.com/nighthawk6389/deconstructed-papers-skill). The typical workflow:
+
+1. Run this tracker to discover trending papers
+2. The `--share` flag handles calling the deconstructedpapers.com API automatically
+3. social_posts.md contains ready-to-post content with shareable links
+
+For manual sharing of specific papers outside the tracker, use auto-share.py directly:
+```bash
+python auto-share.py share https://arxiv.org/abs/2401.12345
+```
+
+## Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+95 tests covering all pipeline stages, providers, scoring, and export formats.
+
+## Data Sources
+
+| Source | API | Rate Limiting |
+|--------|-----|---------------|
+| arXiv | https://export.arxiv.org/api/query (Atom feed) | 3s minimum between requests, exponential backoff |
+| HuggingFace | https://huggingface.co/api/daily_papers (JSON) | Standard HTTP retry |
+| Semantic Scholar | https://api.semanticscholar.org/graph/v1/paper/batch (POST) | Rate limited, use API key for higher limits |
+| Hacker News | https://hn.algolia.com/api/v1/search (GET) | Standard HTTP retry |
+| GitHub | https://api.github.com/repos/{owner}/{repo} (GET) | 60 req/hr unauthenticated, 5000/hr with token |
+| deconstructedpapers.com | https://www.deconstructedpapers.com/api/papers/auto-share (POST) | Free tier: 10/day, Pro: 20/hr |
+
+All providers handle failures gracefully — a single provider failing does not crash the pipeline.
