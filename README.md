@@ -115,6 +115,22 @@ This will:
 | `~/.gitconfig` | Git user.name and user.email from host (read-only) |
 | `./output` | Social posts output for host-side review |
 
+### Scheduled runs
+
+For recurring runs, use the wrapper script at `scripts/run-arxiv-tracker.sh` which handles logging and env-file loading:
+
+```bash
+# Create secrets file (mode 600)
+mkdir -p ~/.config/arxiv-tracker
+echo "DP_API_KEY=dp_live_..." > ~/.config/arxiv-tracker/env
+chmod 600 ~/.config/arxiv-tracker/env
+
+# Run manually, or wire into systemd timer / cron
+./scripts/run-arxiv-tracker.sh
+```
+
+Defaults: reads secrets from `~/.config/arxiv-tracker/env`, outputs to `~/arxiv-tracker-output/`, logs to `~/arxiv-tracker-output/logs/YYYY-MM-DD.log`. Override with `OUTPUT_DIR`, `ENV_FILE`, `IMAGE` env vars.
+
 ### Reddit Posting
 
 After reviewing `output/social_posts.md`, post to Reddit using the Claude Code skill:
