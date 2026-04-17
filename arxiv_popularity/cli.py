@@ -8,6 +8,7 @@ from arxiv_popularity.config import load_config
 from arxiv_popularity.pipeline.discover import discover
 from arxiv_popularity.pipeline.enrich import enrich_papers
 from arxiv_popularity.pipeline.score import score_papers
+from arxiv_popularity.pipeline.share import share_papers
 from arxiv_popularity.pipeline.export import export_all
 from arxiv_popularity.utils import parse_window, setup_logging
 
@@ -32,8 +33,13 @@ def run(args: argparse.Namespace) -> None:
     logger.info("=== Stage 3: Scoring ===")
     papers = score_papers(papers, config)
 
-    # 4. Export
-    logger.info("=== Stage 4: Export ===")
+    # 4. Share (optional)
+    if args.share:
+        logger.info("=== Stage 4: Share ===")
+        papers = share_papers(papers, config, args.top)
+
+    # 5. Export
+    logger.info("=== Stage %d: Export ===", 5 if args.share else 4)
     export_all(papers, args.output_dir, args.top)
 
     elapsed = time.time() - start
@@ -58,6 +64,8 @@ def main() -> None:
                             help="Number of papers in ranked report (default: 50)")
     run_parser.add_argument("--output-dir", default="output",
                             help="Output directory (default: output)")
+    run_parser.add_argument("--share", action="store_true",
+                            help="Share top papers via deconstructedpapers.com and generate social posts (requires DP_API_KEY)")
     run_parser.add_argument("-v", "--verbose", action="store_true",
                             help="Enable debug logging")
 

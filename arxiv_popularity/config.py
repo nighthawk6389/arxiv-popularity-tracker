@@ -36,4 +36,10 @@ def load_config() -> dict:
     gh_token = os.environ.get("GITHUB_TOKEN")
     if gh_token:
         cfg["github_token"] = gh_token
+    dp_key = os.environ.get("DP_API_KEY")
+    if dp_key:
+        cfg["dp_api_key"] = dp_key
+    dp_base = os.environ.get("DP_BASE_URL")
+    if dp_base:
+        cfg["dp_base_url"] = dp_base
     return cfg

@@ -227,9 +227,106 @@ def _export_html(papers: list[Paper], path: str, top_n: int) -> None:
     logger.info("Wrote %s (top %d)", path, len(top))
 
 
+_SUBREDDIT_MAP: dict[str, list[str]] = {
+    "cs.AI": ["r/MachineLearning", "r/artificial"],
+    "cs.LG": ["r/MachineLearning", "r/deeplearning"],
+    "cs.CL": ["r/LanguageTechnology", "r/MachineLearning"],
+    "cs.CV": ["r/computervision", "r/MachineLearning"],
+    "cs.NE": ["r/MachineLearning"],
+    "cs.IR": ["r/MachineLearning", "r/InformationRetrieval"],
+    "stat.ML": ["r/MachineLearning", "r/statistics"],
+}
+
+_HASHTAG_MAP: dict[str, list[str]] = {
+    "cs.AI": ["#AI", "#MachineLearning"],
+    "cs.LG": ["#DeepLearning", "#ML"],
+    "cs.CL": ["#NLP", "#LLM"],
+    "cs.CV": ["#ComputerVision", "#AI"],
+    "cs.NE": ["#NeuralNetworks", "#AI"],
+    "cs.IR": ["#InformationRetrieval", "#AI"],
+    "stat.ML": ["#MachineLearning", "#Statistics"],
+}
+
+
+def _subreddits_for(categories: list[str]) -> list[str]:
+    subs: list[str] = []
+    for cat in categories:
+        for s in _SUBREDDIT_MAP.get(cat, []):
+            if s not in subs:
+                subs.append(s)
+    return subs or ["r/MachineLearning"]
+
+
+def _hashtags_for(categories: list[str]) -> list[str]:
+    tags: list[str] = []
+    for cat in categories:
+        for t in _HASHTAG_MAP.get(cat, []):
+            if t not in tags:
+                tags.append(t)
+    return tags or ["#AI", "#Research"]
+
+
+def _make_x_post(paper: Paper) -> str:
+    """Build an X/Twitter post under 280 characters."""
+    hashtags = " ".join(_hashtags_for(paper.categories))
+    link = paper.share_url or paper.arxiv_url
+    suffix = f"\n\nEquations explained: {link}\n\n{hashtags}"
+    max_title = 280 - len(suffix)
+    title = paper.title
+    if len(title) > max_title:
+        title = title[:max_title - 1] + "\u2026"
+    return title + suffix
+
+
+def _export_social_posts(papers: list[Paper], path: str, top_n: int) -> None:
+    shared = [p for p in papers[:top_n] if p.share_url]
+    if not shared:
+        return
+
+    lines = [
+        "# Social Posts",
+        "",
+        f"*{len(shared)} papers with shareable links*",
+        "",
+    ]
+
+    for i, p in enumerate(shared, 1):
+        subs = ", ".join(_subreddits_for(p.categories))
+
+        # Reddit section
+        lines.append(f"## {i}. {p.title}")
+        lines.append("")
+        lines.append(f"**Suggested subreddits:** {subs}")
+        lines.append("")
+        lines.append(f"**Post title:** {p.title}")
+        lines.append("")
+        lines.append("**Post body:**")
+        lines.append(f"{p.explanation}.")
+        lines.append("")
+        lines.append(f"Math-focused explanation with all equations broken down: {p.share_url}")
+        lines.append("")
+        lines.append(f"Paper: {p.arxiv_url}")
+        lines.append("")
+
+        # X section
+        x_post = _make_x_post(p)
+        lines.append("**X post:**")
+        lines.append("```")
+        lines.append(x_post)
+        lines.append("```")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    logger.info("Wrote %s (%d papers)", path, len(shared))
+
+
 def export_all(papers: list[Paper], output_dir: str, top_n: int) -> None:
     os.makedirs(output_dir, exist_ok=True)
     _export_json(papers, os.path.join(output_dir, "papers.json"))
     _export_csv(papers, os.path.join(output_dir, "papers.csv"))
     _export_markdown(papers, os.path.join(output_dir, "report.md"), top_n)
     _export_html(papers, os.path.join(output_dir, "report.html"), top_n)
+    _export_social_posts(papers, os.path.join(output_dir, "social_posts.md"), top_n)

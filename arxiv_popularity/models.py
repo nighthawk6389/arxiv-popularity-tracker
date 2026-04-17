@@ -47,3 +47,4 @@ class Paper:
     total_score: float = 0.0
     score_breakdown: ScoreBreakdown | None = None
     explanation: str = ""
+    share_url: str | None = None
