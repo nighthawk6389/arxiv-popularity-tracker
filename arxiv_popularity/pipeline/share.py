@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from arxiv_popularity.models import Paper
 from arxiv_popularity.utils import fetch_with_retry
@@ -8,6 +9,7 @@ from arxiv_popularity.utils import fetch_with_retry
 logger = logging.getLogger("arxiv_popularity.pipeline.share")
 
 DEFAULT_BASE_URL = "https://www.deconstructedpapers.com"
+DELAY_BETWEEN_PAPERS_SECONDS = 60
 
 
 def _share_paper(paper: Paper, base_url: str, api_key: str) -> None:
@@ -47,7 +49,10 @@ def share_papers(papers: list[Paper], config: dict, top_n: int) -> list[Paper]:
     top = papers[:top_n]
     logger.info("Sharing %d papers via %s", len(top), base_url)
 
-    for paper in top:
+    for idx, paper in enumerate(top):
+        if idx > 0:
+            logger.info("Sleeping %ds before next share request", DELAY_BETWEEN_PAPERS_SECONDS)
+            time.sleep(DELAY_BETWEEN_PAPERS_SECONDS)
         _share_paper(paper, base_url, api_key)
 
     shared = sum(1 for p in top if p.share_url)

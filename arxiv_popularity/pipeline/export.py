@@ -144,6 +144,8 @@ tr:hover { background: #f0f4ff; }
 .badge.hf { background: #ffd21e; color: #1a1a2e; }
 .badge.gh { background: #2ea44f; color: white; }
 .explanation { color: #555; font-size: 0.8rem; max-width: 14rem; }
+.explained-btn { display: inline-block; padding: 0.25rem 0.6rem; background: #4361ee; color: white !important; text-decoration: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-top: 0.4rem; transition: background 0.15s; }
+.explained-btn:hover { background: #3a56d4; text-decoration: none; }
 """
 
 
@@ -174,12 +176,22 @@ def _export_html(papers: list[Paper], path: str, top_n: int) -> None:
 
         score_bar_width = min(100, int(p.total_score * 100))
 
+        # Deconstructed Papers explained button (only if shared)
+        explained_btn = ""
+        if p.share_url:
+            explained_btn = (
+                '          <div><a class="explained-btn" href="'
+                + escape(p.share_url)
+                + '" target="_blank">Read explanation &rarr;</a></div>\n'
+            )
+
         rows.append(
             "      <tr>\n"
             "        <td class=\"rank\">" + str(i) + "</td>\n"
             "        <td class=\"title-cell\">\n"
             "          <a href=\"" + escape(p.arxiv_url) + "\" target=\"_blank\">" + escape(p.title) + "</a>\n"
             "          <div class=\"authors\">" + escape(authors_short) + "</div>\n"
+            + explained_btn +
             "        </td>\n"
             "        <td class=\"date\">" + date + "</td>\n"
             "        <td class=\"score\">\n"

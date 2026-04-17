@@ -111,3 +111,20 @@ def test_social_posts_contain_hashtags(tmp_path):
     export_all(papers, output_dir=str(tmp_path), top_n=50)
     content = (tmp_path / "social_posts.md").read_text()
     assert "#AI" in content or "#MachineLearning" in content
+
+
+def test_html_shows_explained_button_when_shared(tmp_path):
+    papers = [_make_shared_paper()]
+    export_all(papers, output_dir=str(tmp_path), top_n=50)
+    html = (tmp_path / "report.html").read_text()
+    assert 'class="explained-btn"' in html
+    assert "Read explanation" in html
+    assert "deconstructedpapers.com/papers/2401.12345" in html
+
+
+def test_html_omits_explained_button_without_share_url(tmp_path):
+    papers = [_make_scored_paper()]
+    export_all(papers, output_dir=str(tmp_path), top_n=50)
+    html = (tmp_path / "report.html").read_text()
+    assert 'class="explained-btn"' not in html
+    assert "Read explanation" not in html

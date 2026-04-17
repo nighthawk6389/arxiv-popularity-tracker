@@ -30,7 +30,8 @@ def test_share_sets_url_on_success():
 
     config = {"dp_api_key": "dp_live_test", "dp_base_url": "https://www.deconstructedpapers.com"}
 
-    with patch("arxiv_popularity.pipeline.share.fetch_with_retry", return_value=mock_resp):
+    with patch("arxiv_popularity.pipeline.share.fetch_with_retry", return_value=mock_resp), \
+         patch("arxiv_popularity.pipeline.share.time.sleep"):
         share_papers(papers, config, top_n=5)
 
     assert papers[0].share_url == "https://www.deconstructedpapers.com/papers/abc123"
@@ -40,7 +41,8 @@ def test_share_handles_api_failure_gracefully():
     papers = [_make_paper()]
     config = {"dp_api_key": "dp_live_test"}
 
-    with patch("arxiv_popularity.pipeline.share.fetch_with_retry", side_effect=Exception("API down")):
+    with patch("arxiv_popularity.pipeline.share.fetch_with_retry", side_effect=Exception("API down")), \
+         patch("arxiv_popularity.pipeline.share.time.sleep"):
         result = share_papers(papers, config, top_n=5)
 
     assert result[0].share_url is None
@@ -52,9 +54,25 @@ def test_share_only_processes_top_n():
     mock_resp.json.return_value = {"url": "/papers/x", "cached": True}
     config = {"dp_api_key": "dp_live_test"}
 
-    with patch("arxiv_popularity.pipeline.share.fetch_with_retry", return_value=mock_resp) as mock_fetch:
+    with patch("arxiv_popularity.pipeline.share.fetch_with_retry", return_value=mock_resp) as mock_fetch, \
+         patch("arxiv_popularity.pipeline.share.time.sleep"):
         share_papers(papers, config, top_n=3)
 
     assert mock_fetch.call_count == 3
     assert papers[0].share_url is not None
     assert papers[3].share_url is None
+
+
+def test_share_sleeps_between_papers():
+    papers = [_make_paper(f"2401.{i:05d}") for i in range(3)]
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"url": "/papers/x", "cached": True}
+    config = {"dp_api_key": "dp_live_test"}
+
+    with patch("arxiv_popularity.pipeline.share.fetch_with_retry", return_value=mock_resp), \
+         patch("arxiv_popularity.pipeline.share.time.sleep") as mock_sleep:
+        share_papers(papers, config, top_n=3)
+
+    # 3 papers -> 2 sleeps (between papers, not before first or after last)
+    assert mock_sleep.call_count == 2
+    mock_sleep.assert_called_with(60)
