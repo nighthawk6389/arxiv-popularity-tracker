@@ -138,6 +138,8 @@ Defaults: reads secrets from `~/.config/arxiv-tracker/env`, outputs to `~/arxiv-
 
 ### Reddit Posting
 
+For the target daily Reddit format and tone, see [`REDDIT_POST_SPEC.md`](REDDIT_POST_SPEC.md).
+
 After reviewing `output/social_posts.md`, post to Reddit using the Claude Code skill:
 
 ```
