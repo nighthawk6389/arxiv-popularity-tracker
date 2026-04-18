@@ -9,6 +9,7 @@ from arxiv_popularity.pipeline.discover import discover
 from arxiv_popularity.pipeline.enrich import enrich_papers
 from arxiv_popularity.pipeline.score import score_papers
 from arxiv_popularity.pipeline.share import share_papers
+from arxiv_popularity.pipeline.reddit_queue import generate_reddit_outputs
 from arxiv_popularity.pipeline.export import export_all
 from arxiv_popularity.utils import parse_window, setup_logging
 
@@ -38,6 +39,14 @@ def run(args: argparse.Namespace) -> None:
         logger.info("=== Stage 4: Share ===")
         papers = share_papers(papers, config, args.top)
 
+        # 4b. Reddit review queue (only meaningful when share URLs exist)
+        logger.info("=== Stage 4b: Reddit queue ===")
+        generate_reddit_outputs(
+            papers,
+            output_dir=args.output_dir,
+            history_path=args.reddit_history,
+        )
+
     # 5. Export
     logger.info("=== Stage %d: Export ===", 5 if args.share else 4)
     export_all(papers, args.output_dir, args.top)
@@ -66,6 +75,8 @@ def main() -> None:
                             help="Output directory (default: output)")
     run_parser.add_argument("--share", action="store_true",
                             help="Share top papers via deconstructedpapers.com and generate social posts (requires DP_API_KEY)")
+    run_parser.add_argument("--reddit-history", default="state/reddit_post_history.json",
+                            help="Path to Reddit post-history JSON (default: state/reddit_post_history.json)")
     run_parser.add_argument("-v", "--verbose", action="store_true",
                             help="Enable debug logging")
 
