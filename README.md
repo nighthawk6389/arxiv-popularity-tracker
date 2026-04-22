@@ -31,6 +31,7 @@ python -m arxiv_popularity run \
 | `--top` | `50` | Papers in ranked report |
 | `--output-dir` | `output` | Output directory |
 | `--share` | off | Share top papers via deconstructedpapers.com and generate social posts (requires `DP_API_KEY`) |
+| `--reddit-history` | `state/reddit_post_history.json` | Path to Reddit post-history JSON used to suppress repeats |
 | `-v` | off | Verbose/debug logging |
 
 ### Output Files
@@ -40,6 +41,10 @@ python -m arxiv_popularity run \
 - `report.md` — Markdown summary
 - `report.html` — **primary output** — ranked HTML report
 - `social_posts.md` — copy-paste Reddit and X posts (only generated with `--share`)
+- `reddit_review.md` — human review file for the Reddit queue (only with `--share`)
+- `reddit_queue.json` — machine-friendly Reddit queue of up to 5 posts/day (only with `--share`)
+
+The Reddit queue selects HF-trending papers that also have a share URL, picks exactly one subreddit per paper by category (cs.CL → r/LanguageTechnology, cs.CV → r/computervision, everything else → r/MachineLearning; r/artificial is avoided), and suppresses repeats by skipping any `arxiv_id` posted within the last 14 days according to `state/reddit_post_history.json` (override with `--reddit-history`). Actual posting is handled separately — queue generation never mutates the history file.
 
 ## Environment Variables
 
@@ -73,10 +78,10 @@ Each paper includes a human-readable explanation of why it ranked where it did.
 ## Architecture
 
 ```
-CLI -> Discovery -> Enrichment -> Scoring -> Share (optional) -> Export
-        |              |                       |
-        +- arXiv API   +- Semantic Scholar     +- deconstructedpapers.com
-        +- HuggingFace +- Hacker News
+CLI -> Discovery -> Enrichment -> Scoring -> Share (optional) -> Reddit queue -> Export
+        |              |                       |                  |
+        +- arXiv API   +- Semantic Scholar     +- deconstructed-  +- state/reddit_post_history.json
+        +- HuggingFace +- Hacker News             papers.com
                        +- GitHub
 ```
 
@@ -132,6 +137,8 @@ chmod 600 ~/.config/arxiv-tracker/env
 Defaults: reads secrets from `~/.config/arxiv-tracker/env`, outputs to `~/arxiv-tracker-output/`, logs to `~/arxiv-tracker-output/logs/YYYY-MM-DD.log`. Override with `OUTPUT_DIR`, `ENV_FILE`, `IMAGE` env vars.
 
 ### Reddit Posting
+
+For the target daily Reddit format and tone, see [`REDDIT_POST_SPEC.md`](REDDIT_POST_SPEC.md).
 
 After reviewing `output/social_posts.md`, post to Reddit using the Claude Code skill:
 
